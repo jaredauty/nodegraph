@@ -10,7 +10,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.setScene(model)
 
 
-class NodeItem(QtWidgets.QGraphicsRectItem):
+class NodeItem(QtWidgets.QGraphicsItem):
     def __init__(self, node_id, *args, **kwargs):
         self.editable = kwargs.pop('editable', True)
         self.id = node_id
@@ -18,11 +18,15 @@ class NodeItem(QtWidgets.QGraphicsRectItem):
         self.sockets = {}
         self.style = kwargs.pop('style', {})
         defaults = {
-            'header_size': 20
+            'header_size': 10,
+            'width': 50,
+            'height': 50,
+            'corner_radius': 5
         }
         for key in defaults:
             if key not in self.style:
                 self.style[key] = defaults[key]
+        self._rect = QtCore.QRectF(0, 0, self.style['width'], self.style['height'])
         super(NodeItem, self).__init__(*args, **kwargs)
         if self.editable:
             self.setFlags(self.ItemIsMovable | self.ItemIsSelectable)
@@ -39,6 +43,33 @@ class NodeItem(QtWidgets.QGraphicsRectItem):
         self.sockets[name] = self._add_port(name, *args, **kwargs)
         self._layout_ports()
 
+    def boundingRect(self):
+        rect = self._rect
+        for port in self.plugs.values() + self.sockets.values():
+            rect = rect.united(
+                QtCore.QRectF(
+                    self.mapFromItem(port, port.boundingRect().topLeft()),
+                    self.mapFromItem(port, port.boundingRect().bottomRight())
+                )
+            )
+        return rect
+
+    def paint(self, painter, option, widget):
+        corner_rad = self.style['corner_radius']
+        background_path = QtGui.QPainterPath()
+        background_path.addRoundedRect(self._rect, corner_rad, corner_rad)
+        painter.drawPath(background_path)
+
+        # Header
+        header_path = QtGui.QPainterPath()
+        header_path.moveTo(QtCore.QPointF(self._rect.x(), self._rect.y() + self.header_size))
+        header_path.arcTo(QtCore.QRectF(self._rect.x(), self._rect.y(), corner_rad * 2, corner_rad * 2), 180, -90)
+        header_path.lineTo(QtCore.QPointF(self._rect.right() - corner_rad, self._rect.y()))
+        header_path.arcTo(QtCore.QRectF(self._rect.right() - (corner_rad * 2), self._rect.y(), corner_rad * 2, corner_rad * 2), 90, -90)
+        header_path.lineTo(QtCore.QPointF(self._rect.right(), self._rect.y() + self.header_size))
+        header_path.closeSubpath()
+        painter.drawPath(header_path)
+
     def _add_port(self, name, *args, **kwargs):
         port_class = kwargs.pop('port_class', PortItem)
         kwargs['parent'] = self
@@ -48,7 +79,7 @@ class NodeItem(QtWidgets.QGraphicsRectItem):
     def _layout_ports(self):
         """" Lay out sockets and plugs on edges of the node.
         """
-        rect = self.rect()
+        rect = self._rect
         port_height = float(rect.height() - self.header_size)
         # layout sockets
         if self.sockets:
@@ -97,6 +128,12 @@ class ConnectionItem(QtWidgets.QGraphicsItem):
 
     def paint(self, painter, options, widget):
         painter.drawPath(self.path)
+
+    def shape(self):
+        stroker = QtGui.QPainterPathStroker()
+        stroker.setWidth(10)
+        stroked_path = stroker.createStroke(self.path)
+        return stroked_path
 
     def _rebuild_points(self):
         path = QtGui.QPainterPath(self._plug_pos)

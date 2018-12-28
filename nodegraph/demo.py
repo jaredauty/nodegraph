@@ -15,7 +15,7 @@ def main():
 
     nodes = []
     for i in range(2):
-        node = model.create_node(QtCore.QRectF(0, 0, 50, 50))
+        node = model.create_node()
         node.create_plug('out', QtCore.QRectF(0, 0, 10, 10))
         node.create_socket('in', QtCore.QRectF(0, 0, 10, 10))
         nodes.append(node)
