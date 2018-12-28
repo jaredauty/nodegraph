@@ -16,15 +16,28 @@ class NodeItem(QtWidgets.QGraphicsRectItem):
         self.id = node_id
         self.plugs = {}
         self.sockets = {}
+        self.style = kwargs.pop('style', {})
+        defaults = {
+            'header_size': 20
+        }
+        for key in defaults:
+            if key not in self.style:
+                self.style[key] = defaults[key]
         super(NodeItem, self).__init__(*args, **kwargs)
         if self.editable:
             self.setFlags(self.ItemIsMovable | self.ItemIsSelectable)
 
+    @property
+    def header_size(self):
+        return self.style['header_size']
+
     def create_plug(self, name, *args, **kwargs):
         self.plugs[name] = self._add_port(name, *args, **kwargs)
+        self._layout_ports()
 
     def create_socket(self, name, *args, **kwargs):
         self.sockets[name] = self._add_port(name, *args, **kwargs)
+        self._layout_ports()
 
     def _add_port(self, name, *args, **kwargs):
         port_class = kwargs.pop('port_class', PortItem)
@@ -32,13 +45,25 @@ class NodeItem(QtWidgets.QGraphicsRectItem):
         port = port_class(name, *args, **kwargs)
         return port
 
+    def _layout_ports(self):
+        """" Lay out sockets and plugs on edges of the node.
+        """
+        rect = self.rect()
+        port_height = float(rect.height() - self.header_size)
+        # layout sockets
+        if self.sockets:
+            socket_spacing = port_height / float(len(self.sockets) + 1)
+            for i, socket in enumerate(self.sockets.values()):
+                socket.setPos(QtCore.QPointF(rect.x(), self.header_size + ((i + 1) * socket_spacing)))
 
-# class ConnectionItem(QtWidgets.QGraphicsPathItem):
+        if self.plugs:
+            plug_spacing = port_height / float(len(self.plugs) + 1)
+            for i, plug in enumerate(self.plugs.values()):
+                plug.setPos(QtCore.QPointF(rect.x() + rect.width(), self.header_size + ((i + 1) * plug_spacing)))
+
+
 class ConnectionItem(QtWidgets.QGraphicsItem):
     def __init__(self, socket, plug, *args, **kwargs):
-        # # Parent the connection under the socket, this way if the socket node is removed or the socket moved the
-        # # connection will follow suit.
-        # kwargs['parent'] = socket
         super(ConnectionItem, self).__init__(*args, **kwargs)
         self._plug_pos = QtCore.QPointF(0, 0)
         self._socket_pos = QtCore.QPointF(0, 0)
@@ -72,11 +97,14 @@ class ConnectionItem(QtWidgets.QGraphicsItem):
 
     def paint(self, painter, options, widget):
         painter.drawPath(self.path)
-        #painter.drawRect(self.boundingRect())
 
     def _rebuild_points(self):
         path = QtGui.QPainterPath(self._plug_pos)
-        path.lineTo(self._socket_pos)
+        path.cubicTo(
+            QtCore.QPointF(((self._plug_pos.x() * 2) + self._socket_pos.x()) / 3.0, self._plug_pos.y()),
+            QtCore.QPointF(((self._socket_pos.x() * 2) + self._plug_pos.x()) / 3.0, self._socket_pos.y()),
+            self._socket_pos
+        )
         self.setPath(path)
 
 
@@ -90,6 +118,15 @@ class PortItem(QtWidgets.QGraphicsEllipseItem):
     def node(self):
         return self.parent()
 
+    def centerPos(self):
+        return self.mapToScene(self.boundingRect().center())
+
+    def setPos(self, pos):
+        # convert position to center
+        rect = self.boundingRect()
+        new_pos = pos - QtCore.QPointF(rect.width() / 2.0, rect.height() / 2.0)
+        super(PortItem, self).setPos(new_pos)
+
     def add_connection(self, connection):
         self.connections.append(connection)
 
@@ -98,9 +135,9 @@ class PortItem(QtWidgets.QGraphicsEllipseItem):
         # Ensure all connections have updated positions
         for connection in self.connections:
             if connection.plug is self:
-                connection.set_plug_pos(self.scenePos())
+                connection.set_plug_pos(self.centerPos())
             elif connection.socket is self:
-                connection.set_socket_pos(self.scenePos())
+                connection.set_socket_pos(self.centerPos())
 
 
 class GraphModel(QtWidgets.QGraphicsScene):
