@@ -5,6 +5,18 @@ class GraphView(QtWidgets.QGraphicsView):
     def __init__(self, *args, **kwargs):
         super(GraphView, self).__init__(*args, **kwargs)
         self.setViewportUpdateMode(self.FullViewportUpdate)
+        self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.setDragMode(QtWidgets.QGraphicsView.ScrollHandDrag)
+        self.setRenderHints(QtGui.QPainter.Antialiasing)
+
+    def wheelEvent(self, event):
+        if event.delta() > 0:
+            self.scale(1.25, 1.25)
+        else:
+            self.scale(0.8, 0.8)
 
     def set_model(self, model):
         self.setScene(model)
@@ -210,4 +222,9 @@ class GraphModel(QtWidgets.QGraphicsScene):
         painter.end()
         brush = QtGui.QBrush(self.background_image)
         self.setBackgroundBrush(brush)
+
+    def drawBackground(self, painter, rect):
+        super(GraphModel, self).drawBackground(painter, rect)
+        self.setSceneRect(rect.adjusted(-rect.width(), -rect.height(), rect.width(), rect.height()))
+        painter.drawRect(self.sceneRect())
 
